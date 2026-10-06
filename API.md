@@ -4,7 +4,7 @@ Streaming text-to-speech server (Breeze TTS 2) with saved, reusable voices.
 
 - **Base URL:** `http://<server-ip>:7860` (LAN) or `http://127.0.0.1:7860` (on the host)
 - **Auth:** none. LAN only.
-- **Concurrency:** one request at a time. A request made while another is generating gets `409`; retry after a short wait (about 0.5–1 s, with backoff).
+- **Concurrency:** one generation at a time. A direct request made while another is generating waits for the GPU, up to 30 s on the GGUF runtime (`BREEZE_SYNC_WAIT_SECONDS`). It only gets `409` if the GPU is still busy after that; then retry with backoff, or use the warm endpoint, which queues without a limit. (The PyTorch runtime returns `409` at once.)
 - **Runtime:** served by the GGUF runtime (Breeze-TTS-2.cpp, Q8_0, container `breeze-tts-gguf`). The original PyTorch runtime implements the same API and can be switched back in; see the README. Differences between the two are listed in [Runtime differences](#runtime-differences).
 
 ## Endpoints
@@ -54,7 +54,7 @@ The body is JSON: `{"detail": "..."}`.
 |---|---|
 | `400` | Invalid input: empty `text`; `cfg_scale` ≤ 0; `voice` together with `ref_audio`; `ref_audio` without `ref_text` (or the reverse); unreadable `ref_audio`; bad voice name. PyTorch runtime only: `cfg_scale` ≠ 1 when cloning without an instruction |
 | `404` | Unknown `voice` (the message lists the available ids) |
-| `409` | Busy with another request; retry |
+| `409` | Still busy after the wait (30 s on GGUF, immediately on PyTorch); retry with backoff |
 | `500` | Server fault. On an engine crash or GPU fault the container restarts itself; `/health` returns errors or `503` for about 15–20 s (about 2 minutes on the PyTorch runtime), then it's back |
 | `503` | The engine is still loading or restarting; wait and retry |
 
@@ -76,7 +76,7 @@ For when you want the reply to start generating **before** you're ready to play 
 **2. `GET /response/{id}`**: play it. Point any player at `http://<server-ip>:7860/response/{id}`.
 - **Finished:** a normal `audio/wav` file with `Content-Length` and range requests, so players can seek.
 - **Still generating:** a WAV stream that grows as audio is generated and ends when generation does. The header has "unknown length", which players handle.
-- **Requested too early:** the server holds back the first audio byte until there's enough of a head start that playback shouldn't catch up with generation. The player just sees a slightly slower start (measured 1.2–2.3 s for a 50-word reply); no polling or retrying needed.
+- **Requested too early:** the server holds back the first audio byte until there's enough of a head start that playback shouldn't catch up with generation. The player just sees a slightly slower start (measured 2.3–4.6 s for a 50-word reply); no polling or retrying needed.
 - **Queued behind another job:** the request waits until this job's audio is ready.
 - **Options:** `?format=pcm` returns raw s16le PCM instead of WAV. `?min_lead=2.5` requests a bigger head start (seconds), for players with large or uneven buffering.
 - **Headers:** `X-Voice-Id` and `X-Voice-Status`, as in `/v1/audio/speech`.

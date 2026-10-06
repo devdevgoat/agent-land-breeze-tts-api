@@ -36,7 +36,7 @@ python client.py "Hello there." --instruction "A calm, friendly adult voice." -o
 | PyTorch, fast mode | 0.1–0.5 s | 0.58–0.73 | ~17–18 GB | ~10–11 s (estimated from RTF) |
 | PyTorch, eager | 0.65–2.8 s | 3.1–3.5 | ~9.4 GB | ~50 s (estimated from RTF) |
 
-Warm responses played immediately start after about 1.2–2.3 s and didn't stall in testing on an otherwise idle GPU. **Sharing the GPU with another heavy job slows speech down 3–5×.** [BENCHMARKS.md](BENCHMARKS.md) has all the numbers, the models tested and the GPU-sharing results; `scripts/benchmark.py` measures your own hardware.
+Warm responses played immediately start after about 2–4.5 s and didn't stall in testing on an otherwise idle GPU. **Sharing the GPU with another heavy job slows speech down 3–5×.** [BENCHMARKS.md](BENCHMARKS.md) has all the numbers, the models tested and the GPU-sharing results; `scripts/benchmark.py` measures your own hardware.
 
 ## Layout
 

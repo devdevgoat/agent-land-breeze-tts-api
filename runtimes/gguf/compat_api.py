@@ -48,6 +48,8 @@ VOICES_DIR = Path(os.environ.get("BREEZE_VOICES_DIR", "/voices"))
 VOICE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
 SAMPLE_RATE = 24000
 DEFAULT_CFG_SCALE = 1.0
+# How long POST /v1/audio/speech waits for a busy GPU before answering 409 (0 = fail at once).
+SYNC_WAIT_SECONDS = float(os.environ.get("BREEZE_SYNC_WAIT_SECONDS", "30"))
 # A designed voice is only saved if its first clip makes a usable reference.
 MIN_SAVE_SECONDS = 1.0
 MAX_SAVE_SECONDS = 30.0
@@ -401,9 +403,16 @@ async def speech(
     seed: int = Form(42),
 ) -> StreamingResponse:
     args = await _validated(text, voice, instruction, cfg_scale, ref_audio, ref_text, seed, "speech")
-    if busy.locked():
-        raise HTTPException(status_code=409, detail="An inference request is already running.")
-    await busy.acquire()
+    # Wait a while for the GPU instead of failing at once: in production most direct
+    # requests arrived while a warm job was generating and were bounced with 409,
+    # only to retry seconds later. Requests queue fairly (FIFO) with warm jobs.
+    try:
+        await asyncio.wait_for(busy.acquire(), timeout=SYNC_WAIT_SECONDS)
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Busy: another request is still running after {SYNC_WAIT_SECONDS:g} s; retry, or use /v1/audio/speech/warm.",
+        ) from None
     return await _start(args)
 
 
@@ -457,7 +466,11 @@ MAX_PENDING = int(os.environ.get("BREEZE_MAX_PENDING", "32"))
 ENGINE_WAIT_SECONDS = int(os.environ.get("BREEZE_ENGINE_WAIT_SECONDS", "60"))
 MIN_LEAD_SECONDS = float(os.environ.get("BREEZE_MIN_LEAD_SECONDS", "0.75"))
 SECONDS_PER_WORD = 0.32  # default speaking rate (~0.30 s/word measured) when the voice's own is unknown
-LENGTH_MARGIN = 1.1  # estimates err long: an underestimate shrinks the head start
+LENGTH_MARGIN = 1.05  # estimates err long: an underestimate shrinks the head start
+# The live rate is measured from bursty chunks and reads high right after one lands;
+# in production the rate settled at ~0.97x real time (p90 1.1x slower). Plan as if
+# generation is never faster than real time, minus 5%.
+PLANNING_RATE_CAP = 0.95
 SAFETY_SECONDS = 1.0  # spare audio the player should still have when generation ends...
 SAFETY_FRACTION = 0.08  # ...or this share of the reply, whichever is larger
 
@@ -546,6 +559,7 @@ class WarmJob:
         if rate is None:
             return float("inf")
         total = max(self.estimated_seconds, self.generated_seconds * 1.1)
+        rate = min(rate, 1.0) * PLANNING_RATE_CAP
         next_chunk = CHUNK_MAX_SECONDS / rate + 0.25
         safety = max(SAFETY_SECONDS, SAFETY_FRACTION * total)
         finish = total - rate * (total - safety)

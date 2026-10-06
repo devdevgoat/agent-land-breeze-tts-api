@@ -90,10 +90,19 @@ A simulated player opened `/response/{id}` right after the warm call and played 
 | Same, second request queued behind the first | 16.2–16.5 s (queued) | +0.90 / +0.91 / +0.92 s | no stalls |
 | Benchmark script, calm voice, before the per-voice estimate | 1.4–1.5 s | +0.76 / **−9.93 s** | one stall: that run slowed to RTF 1.54 mid-playback because of GPU contention |
 | Benchmark script, after the per-voice estimate and length-scaled safety | 1.3–6.6 s (adapts to the live rate) | +0.11 / +0.81 / +3.99 s | no stalls |
+| Production, same estimate but trusting the early measured rate | 1.2 s | **−0.24 s** | one stall: the rate measured right after a chunk lands reads high |
+| **Production, rate capped at 0.95× real time for planning (current)** | **2.3–4.6 s** | +0.18 / +0.78 / +2.11 s; queued second requests +0.73 to +0.89 s | no stalls |
 
 **Engine restart:** a warm request sent while the engine was restarting waited about 20 s for it, then played normally; before the fix it returned a 500.
 
 **The limit of this design:** the head start is chosen before playback starts. A slowdown that begins **after** playback has started (another process taking the GPU) can still cause a stall. Avoid sharing the GPU with heavy jobs, or ask for a bigger head start with `?min_lead=`.
+
+### Production traffic (6 hours, before the latest changes)
+
+- **Warm responses:** 77 from LAN agents, 70 done. The 7 failures were all during an engine crash caused by a test running alongside; warm jobs now wait out a restart.
+- **Speed:** RTF median 0.97, 90th percentile 1.1, max 3.8. Generation runs at about real time for these designed voices, which is why the head start plans conservatively.
+- **Warm queueing:** median 0 s, 90th percentile 20 s, max 47 s (clients sent warm jobs in bursts).
+- **Direct `/v1/audio/speech`:** 18 of 23 requests were turned away with `409` while a warm job was generating. Direct requests now wait up to 30 s for the GPU first (`BREEZE_SYNC_WAIT_SECONDS`). Verified: two simultaneous requests both got 200, the second after about 3 s.
 
 ### Benchmark script run (2026-10-06, `benchmarks/results/2026-10-06_nvidia-geforce-rtx-4090_gguf.json`)
 
