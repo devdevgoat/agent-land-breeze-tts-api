@@ -1,0 +1,16 @@
+{
+  "_comment": "Work segments of the Claude Code session that built breeze-tts and zimage-gen (one session, 2026-10-04 to 2026-10-06). Each segment starts at the user prompt that began that work.",
+  "segments": [
+    ["2026-10-04T21:15:48", "breeze-tts"],
+    ["2026-10-04T22:17:37", "agentv-hooks (TV bridge setup, not in either repo)"],
+    ["2026-10-05T13:26:54", "breeze-tts"],
+    ["2026-10-05T17:40:11", "agentv-hooks (TV bridge setup, not in either repo)"],
+    ["2026-10-05T17:40:55", "breeze-tts"],
+    ["2026-10-05T18:25:33", "zimage-gen"],
+    ["2026-10-06T01:08:43", "breeze-tts"],
+    ["2026-10-06T01:16:15", "zimage-gen"],
+    ["2026-10-06T12:35:31", "breeze-tts"],
+    ["2026-10-06T13:11:31", "publishing (both repos)"]
+  ],
+  "subagent_label": "breeze-tts (subagent: GGUF port)"
+}

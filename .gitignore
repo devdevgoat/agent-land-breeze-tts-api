@@ -1,0 +1,10 @@
+models/
+outputs/
+responses/
+*.log
+*.pcm
+*.tmp
+__pycache__/
+# Voice clips are personal data (and often someone else's voice): keep them out of git.
+voices/*
+!voices/README.md

@@ -1,0 +1,43 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below, and credit the upstream projects it builds on."
+title: "agent-land-breeze-tts-api: a self-hosted streaming API for Breeze TTS 2"
+type: software
+authors:
+  - alias: devdevgoat
+repository-code: "https://github.com/devdevgoat/agent-land-breeze-tts-api"
+license: Apache-2.0
+date-released: "2026-10-06"
+keywords:
+  - text-to-speech
+  - breeze-tts
+  - gguf
+  - fastapi
+  - docker
+references:
+  - type: software
+    title: "Breeze TTS 2"
+    authors:
+      - name: BreezeBlue
+    url: "https://huggingface.co/BreezeBlue/Breeze-TTS-2"
+    repository-code: "https://github.com/breezeblue-ai/breeze-tts"
+    year: 2026
+    license-url: "https://huggingface.co/BreezeBlue/Breeze-TTS-2/blob/main/LICENSE"
+    notes: "Model weights and self-hosted outputs: BreezeBlue Research and Non-Commercial License. Inference code: Apache-2.0."
+  - type: software
+    title: "Qwen3-TTS"
+    authors:
+      - name: "Alibaba Qwen Team"
+    repository-code: "https://github.com/QwenLM/Qwen3-TTS"
+    license: Apache-2.0
+  - type: software
+    title: "Breeze-TTS-2.cpp"
+    authors:
+      - name: HoppouAI
+    repository-code: "https://github.com/HoppouAI/Breeze-TTS-2.cpp"
+    license: Apache-2.0
+  - type: software
+    title: "ggml"
+    authors:
+      - name: ggml-org
+    repository-code: "https://github.com/ggml-org/ggml"
+    license: MIT
