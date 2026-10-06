@@ -15,11 +15,11 @@ This repository's own code and docs are licensed under Apache-2.0 (see [LICENSE]
 
 | Component | How it's used | Licence | Source |
 |---|---|---|---|
-| breeze-tts (BreezeBlue inference code) | Git submodule `src/`, built into the PyTorch image | Apache-2.0 | https://github.com/breezeblue-ai/breeze-tts |
+| breeze-tts (BreezeBlue inference code) | Git submodule `runtimes/pytorch/upstream/`, built into the PyTorch image | Apache-2.0 | https://github.com/breezeblue-ai/breeze-tts |
 | Qwen3-TTS audio tokenizer code (Alibaba Qwen Team) | Part of the Breeze inference stack (`qwen-tts` package) | Apache-2.0 | https://github.com/QwenLM/Qwen3-TTS |
-| Breeze-TTS-2.cpp | Cloned at a pinned commit and compiled by `gguf/Dockerfile` | Apache-2.0 | https://github.com/HoppouAI/Breeze-TTS-2.cpp |
+| Breeze-TTS-2.cpp | Cloned at a pinned commit and compiled by `runtimes/gguf/Dockerfile` | Apache-2.0 | https://github.com/HoppouAI/Breeze-TTS-2.cpp |
 | ggml | Compiled into `breeze-server` (CUDA backend) | MIT | https://github.com/ggml-org/ggml |
-| shine (MP3 encoder, a submodule of Breeze-TTS-2.cpp) | Compiled into `breeze-server` by `gguf/Dockerfile` | **LGPL-2.0** | https://github.com/toots/shine |
+| shine (MP3 encoder, a submodule of Breeze-TTS-2.cpp) | Compiled into `breeze-server` by `runtimes/gguf/Dockerfile` | **LGPL-2.0** | https://github.com/toots/shine |
 | FlashAttention 2.8.3 | Built into the PyTorch image | BSD-3-Clause | https://github.com/Dao-AILab/flash-attention |
 | PyTorch (`pytorch/pytorch` base image) | PyTorch runtime | BSD-3-Clause | https://github.com/pytorch/pytorch |
 | NVIDIA CUDA container images | Base images for both runtimes | NVIDIA Deep Learning Container License | https://catalog.ngc.nvidia.com/ |

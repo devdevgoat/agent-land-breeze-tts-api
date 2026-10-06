@@ -81,6 +81,7 @@ For when you want the reply to start generating **before** you're ready to play 
 - **Options:** `?format=pcm` returns raw s16le PCM instead of WAV. `?min_lead=2.5` requests a bigger head start (seconds), for players with large or uneven buffering.
 - **Headers:** `X-Voice-Id` and `X-Voice-Status`, as in `/v1/audio/speech`.
 - **Errors:** `404` for an unknown or expired id, `500` if generation failed.
+- **Engine restarts:** if the engine is restarting (for example after a GPU fault), warm jobs wait for it, up to 60 s (`BREEZE_ENGINE_WAIT_SECONDS`), instead of failing.
 
 **3. `GET /response/{id}/status`**:
 

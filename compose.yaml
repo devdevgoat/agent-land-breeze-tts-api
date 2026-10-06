@@ -1,0 +1,86 @@
+# Breeze TTS 2 API. All settings come from .env (see .env.example); COMPOSE_PROFILES
+# in .env selects the runtime. You shouldn't need to edit this file.
+#
+#   docker compose up -d --build     # build + start the selected runtime
+#   docker compose stop              # stop (stays stopped across reboots)
+#   docker compose logs -f
+
+x-gpu: &gpu
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            count: all
+            capabilities: [gpu]
+
+x-healthcheck: &healthcheck
+  test: ["CMD", "curl", "-fsS", "http://localhost:7860/health"]
+  interval: 15s
+  timeout: 5s
+  retries: 5
+
+services:
+  # Breeze-TTS-2.cpp (GGUF) + the compatibility API in runtimes/gguf/compat_api.py.
+  gguf:
+    profiles: ["gguf"]
+    build:
+      context: runtimes/gguf
+      args:
+        CUDA_ARCHS: ${CUDA_ARCHS:-89}
+        BREEZE_CPP_COMMIT: ${BREEZE_CPP_COMMIT:-a0e177f91242ebbd2ea8d61548d742c89e4b9e06}
+    image: breeze-tts-gguf:sm${CUDA_ARCHS:-89}
+    container_name: ${BREEZE_CONTAINER_NAME:-breeze-tts}
+    restart: unless-stopped
+    ports:
+      - "${BREEZE_BIND:-0.0.0.0}:${BREEZE_PORT:-7860}:7860"
+    volumes:
+      - ${BREEZE_MODELS_DIR:-./models}/gguf:/models:ro
+      - ${BREEZE_VOICES_DIR:-./voices}:/voices
+      - ${BREEZE_RESPONSES_DIR:-./responses}:/responses
+      - ./API.md:/opt/breeze/API.md:ro   # served at GET /usage
+    environment:
+      BREEZE_MODEL: /models/${BREEZE_GGUF_FILE:-breeze-tts-2-q8_0.gguf}
+      BREEZE_ENGINE_ARGS: ${BREEZE_ENGINE_ARGS:---chunk-max 12}
+      BREEZE_VOICES_DIR: /voices
+      BREEZE_RESPONSES_DIR: /responses
+      BREEZE_RESPONSE_TTL_SECONDS: ${BREEZE_RESPONSE_TTL_SECONDS:-86400}
+      BREEZE_MIN_LEAD_SECONDS: ${BREEZE_MIN_LEAD_SECONDS:-0.75}
+      BREEZE_MAX_PENDING: ${BREEZE_MAX_PENDING:-32}
+      BREEZE_ENGINE_WAIT_SECONDS: ${BREEZE_ENGINE_WAIT_SECONDS:-60}
+      NVIDIA_VISIBLE_DEVICES: ${BREEZE_GPU:-all}
+    healthcheck:
+      <<: *healthcheck
+      start_period: 120s
+    <<: *gpu
+
+  # Original PyTorch runtime: upstream breeze-tts (git submodule) + runtimes/pytorch/voice_api.py.
+  pytorch:
+    profiles: ["pytorch"]
+    build:
+      context: runtimes/pytorch/upstream
+      dockerfile: docker/Dockerfile
+      args:
+        FLASH_ATTN_CUDA_ARCHS: ${FLASH_ATTN_CUDA_ARCHS:-80}
+    image: breeze-tts-pytorch:fa${FLASH_ATTN_CUDA_ARCHS:-80}
+    container_name: ${BREEZE_CONTAINER_NAME:-breeze-tts}
+    restart: unless-stopped
+    entrypoint: []   # upstream entrypoint.sh is just `exec "$@"`; skipping it avoids CRLF issues on Windows checkouts
+    ipc: host
+    ports:
+      - "${BREEZE_BIND:-0.0.0.0}:${BREEZE_PORT:-7860}:7860"
+    volumes:
+      - ${BREEZE_MODELS_DIR:-./models}/breeze-tts-2:/models/breeze:ro
+      - ./runtimes/pytorch/voice_api.py:/app/voice_api.py:ro
+      - ${BREEZE_VOICES_DIR:-./voices}:/voices
+    command: >
+      sh -c "python -m voice_api /models/breeze --host 0.0.0.0 --port 7860 $${BREEZE_PYTORCH_ARGS:-}"
+    environment:
+      BREEZE_PYTORCH_ARGS: ${BREEZE_PYTORCH_ARGS:---fast-all}
+      BREEZE_VOICES_DIR: /voices
+      PYTHONPATH: /app
+      NVIDIA_VISIBLE_DEVICES: ${BREEZE_GPU:-all}
+    healthcheck:
+      <<: *healthcheck
+      start_period: 300s
+    <<: *gpu

@@ -1,6 +1,6 @@
 """breeze-tts compatibility API on top of the Breeze-TTS-2.cpp (GGUF) server.
 
-Implements the contract documented in ../API.md (the same one server/voice_api.py
+Implements the contract documented in ../../API.md (the same one runtimes/pytorch/voice_api.py
 serves for the PyTorch runtime) and forwards generation to ``breeze-server``,
 which runs on 127.0.0.1 inside the same container.
 
@@ -62,7 +62,7 @@ engine_voice_ids: dict[str, tuple[float, int, float, str]] = {}
 
 
 # ---------------------------------------------------------------- voice files
-# Same rules and file layout as server/voice_api.py.
+# Same rules and file layout as runtimes/pytorch/voice_api.py.
 
 def _list_voices() -> list[str]:
     if not VOICES_DIR.is_dir():
@@ -454,9 +454,30 @@ async def _start(args: SpeechArgs) -> StreamingResponse:
 RESPONSES_DIR = Path(os.environ.get("BREEZE_RESPONSES_DIR", "/responses"))
 RESPONSE_TTL = int(os.environ.get("BREEZE_RESPONSE_TTL_SECONDS", str(24 * 3600)))
 MAX_PENDING = int(os.environ.get("BREEZE_MAX_PENDING", "32"))
+ENGINE_WAIT_SECONDS = int(os.environ.get("BREEZE_ENGINE_WAIT_SECONDS", "60"))
 MIN_LEAD_SECONDS = float(os.environ.get("BREEZE_MIN_LEAD_SECONDS", "0.75"))
-SECONDS_PER_WORD = 0.32  # measured ~0.30 s of speech per word; a little high errs on the safe side
-SAFETY_SECONDS = 1.0  # spare audio the player should still have when generation ends
+SECONDS_PER_WORD = 0.32  # default speaking rate (~0.30 s/word measured) when the voice's own is unknown
+LENGTH_MARGIN = 1.1  # estimates err long: an underestimate shrinks the head start
+SAFETY_SECONDS = 1.0  # spare audio the player should still have when generation ends...
+SAFETY_FRACTION = 0.08  # ...or this share of the reply, whichever is larger
+
+
+def _voice_seconds_per_word(voice: str | None) -> float | None:
+    """Speaking rate of a saved voice, from its reference clip and transcript. Voices
+    differ a lot (a calm voice measured ~0.37 s/word vs ~0.30 default); a short
+    reference (< 4 words) says little, so it isn't trusted."""
+    if not voice or not VOICE_NAME.match(voice):
+        return None
+    wav, txt = VOICES_DIR / f"{voice}.wav", VOICES_DIR / f"{voice}.txt"
+    try:
+        words = len(txt.read_text(encoding="utf-8").split())
+        with wave.open(str(wav), "rb") as f:
+            seconds = f.getnframes() / f.getframerate()
+    except (OSError, wave.Error, EOFError):
+        return None
+    if words < 4:
+        return None
+    return min(max(seconds / words, 0.2), 0.8)
 
 
 def _chunk_max_seconds() -> float:
@@ -526,7 +547,8 @@ class WarmJob:
             return float("inf")
         total = max(self.estimated_seconds, self.generated_seconds * 1.1)
         next_chunk = CHUNK_MAX_SECONDS / rate + 0.25
-        finish = total - rate * (total - SAFETY_SECONDS)
+        safety = max(SAFETY_SECONDS, SAFETY_FRACTION * total)
+        finish = total - rate * (total - safety)
         return max(min_lead, next_chunk, finish)
 
     def status(self) -> dict:
@@ -548,12 +570,39 @@ class WarmJob:
 jobs: dict[str, WarmJob] = {}
 
 
+async def _engine_ready(timeout: float) -> bool:
+    """Wait for breeze-server to answer /health (e.g. while it restarts after a crash)."""
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            if (await client.get("/health", timeout=3.0)).status_code == 200:
+                return True
+        except httpx.HTTPError:
+            pass
+        if time.monotonic() > deadline:
+            return False
+        await asyncio.sleep(1)
+
+
 async def _run_warm(job: WarmJob, args: SpeechArgs) -> None:
     try:
-        await busy.acquire()  # queue behind other work (FIFO), no 409 for warm requests
-        job.state, job.started = "generating", time.time()
-        job.notify()
-        response = await _start(args)  # releases `busy` itself when the stream ends
+        # A warm job has no caller waiting on it, so ride out an engine restart
+        # (crash recovery takes ~10-20 s) instead of failing: wait for the engine,
+        # and if it drops while starting, wait and try once more.
+        for attempt in (1, 2):
+            await busy.acquire()  # queue behind other work (FIFO), no 409 for warm requests
+            if not await _engine_ready(ENGINE_WAIT_SECONDS):
+                busy.release()
+                raise HTTPException(status_code=503, detail="TTS engine unavailable (did not come back in time).")
+            if attempt == 1:  # start the clock only now: the rate drives the playback head start
+                job.state, job.started = "generating", time.time()
+                job.notify()
+            try:
+                response = await _start(args)  # releases `busy` itself when the stream ends, or on failure
+                break
+            except HTTPException as error:
+                if error.status_code != 503 or attempt == 2:
+                    raise
         job.voice_headers = {k: v for k, v in response.headers.items() if k.lower().startswith("x-voice")}
         with job.path.open("r+b") as f:
             f.seek(WAV_HEADER)
@@ -634,7 +683,10 @@ async def speech_warm(
     job = WarmJob(
         id=job_id,
         path=RESPONSES_DIR / f"{job_id}.wav",
-        estimated_seconds=max(1.0, len(text.split()) * SECONDS_PER_WORD),
+        estimated_seconds=max(1.0, len(text.split()) * LENGTH_MARGIN * (
+            _voice_seconds_per_word(args.voice or (
+                _designed_voice_id(args.instruction, args.seed) if args.instruction and not args.upload else None
+            )) or SECONDS_PER_WORD)),
     )
     job.path.write_bytes(_wav_header(None))
     jobs[job_id] = job

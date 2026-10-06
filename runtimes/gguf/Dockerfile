@@ -1,7 +1,7 @@
 # Breeze-TTS-2.cpp (GGUF, ggml CUDA backend) + the breeze-tts compatibility API.
-#   docker compose -f gguf/docker-compose.yml up -d --build
+#   Built by ../../compose.yaml (profile "gguf"); settings come from ../../.env.
 #
-# Stage 1 builds breeze-server/breeze-cli with ggml's CUDA backend for Ada (sm89).
+# Stage 1 builds breeze-server/breeze-cli with ggml's CUDA backend for CUDA_ARCHS (89 = Ada).
 # Vulkan is the upstream default, but there is no usable Vulkan driver inside a
 # WSL2 container, so this image uses CUDA.
 FROM nvidia/cuda:12.8.1-devel-ubuntu22.04 AS build

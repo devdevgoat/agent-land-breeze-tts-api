@@ -1,0 +1,106 @@
+{
+  "date": "2026-10-06T11:53:50",
+  "label": "RTX 4090, GGUF Q8_0, chunk-max 12",
+  "notes": "Shared-GPU run: a second Breeze GGUF instance (production) served live warm requests on the same GPU during this run, so 50-word runs 1, 3 and 4 overlapped with it (RTF 1.58, 1.61, 2.87). Run 2 (RTF 0.99) is the uncontended figure. vram_mb includes both instances (~5.2 GB is the other one).",
+  "url": "http://127.0.0.1:7861",
+  "system": {
+    "gpu": "NVIDIA GeForce RTX 4090, 8.9, 24564, 591.86",
+    "cpu": "12th Gen Intel(R) Core(TM) i9-12900K",
+    "os": "Windows 11 (build 26200), Docker Desktop 28.4.0, WSL2"
+  },
+  "config": {
+    "COMPOSE_PROFILES": "gguf",
+    "BREEZE_GGUF_FILE": "breeze-tts-2-q8_0.gguf",
+    "BREEZE_ENGINE_ARGS": "--chunk-max 12",
+    "BREEZE_PYTORCH_ARGS": "--fast-all",
+    "CUDA_ARCHS": "89",
+    "BREEZE_CPP_COMMIT": "a0e177f91242ebbd2ea8d61548d742c89e4b9e06"
+  },
+  "vram_mb": {
+    "idle": 9180,
+    "peak": 11310
+  },
+  "short_line": [
+    {
+      "ttfa_s": 0.752,
+      "wall_s": 6.2,
+      "audio_s": 5.84,
+      "rtf": 1.062,
+      "voice": "v-d270d9f70c99"
+    },
+    {
+      "ttfa_s": 0.404,
+      "wall_s": 5.87,
+      "audio_s": 5.84,
+      "rtf": 1.005,
+      "voice": "v-d270d9f70c99"
+    },
+    {
+      "ttfa_s": 0.451,
+      "wall_s": 6.02,
+      "audio_s": 5.84,
+      "rtf": 1.03,
+      "voice": "v-d270d9f70c99"
+    },
+    {
+      "ttfa_s": 0.455,
+      "wall_s": 5.6,
+      "audio_s": 5.84,
+      "rtf": 0.958,
+      "voice": "v-d270d9f70c99"
+    }
+  ],
+  "words_50": [
+    {
+      "ttfa_s": 0.399,
+      "wall_s": 30.63,
+      "audio_s": 19.44,
+      "rtf": 1.576,
+      "voice": "v-d270d9f70c99"
+    },
+    {
+      "ttfa_s": 0.397,
+      "wall_s": 19.26,
+      "audio_s": 19.44,
+      "rtf": 0.991,
+      "voice": "v-d270d9f70c99"
+    },
+    {
+      "ttfa_s": 0.339,
+      "wall_s": 31.29,
+      "audio_s": 19.44,
+      "rtf": 1.61,
+      "voice": "v-d270d9f70c99"
+    },
+    {
+      "ttfa_s": 1.072,
+      "wall_s": 55.88,
+      "audio_s": 19.44,
+      "rtf": 2.874,
+      "voice": "v-d270d9f70c99"
+    }
+  ],
+  "warm": [
+    {
+      "id_ms": 22,
+      "wait_first_audio_s": 6.58,
+      "audio_s": 19.44,
+      "min_margin_s": 3.99,
+      "stalled": false
+    },
+    {
+      "id_ms": 12,
+      "wait_first_audio_s": 1.29,
+      "audio_s": 19.44,
+      "min_margin_s": 0.81,
+      "stalled": false
+    },
+    {
+      "id_ms": 13,
+      "wait_first_audio_s": 1.46,
+      "audio_s": 19.44,
+      "min_margin_s": 0.11,
+      "stalled": false
+    }
+  ]
+}

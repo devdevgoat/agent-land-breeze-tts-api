@@ -1,3 +1,3 @@
 [submodule "src"]
-	path = src
+	path = runtimes/pytorch/upstream
 	url = https://github.com/breezeblue-ai/breeze-tts.git
