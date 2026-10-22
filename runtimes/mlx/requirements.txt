@@ -1,0 +1,29 @@
+# MLX runtime for Breeze TTS 2 on Apple Silicon (macOS ARM64 only).
+# System deps: brew install sox
+# Python 3.12 required (>=3.12,<3.13).
+
+# MLX inference
+mlx>=0.32
+numpy>=2.0,<3
+safetensors>=0.8,<1
+soundfile>=0.13,<1
+
+# Audio tokenizer (runs on PyTorch MPS, not MLX)
+torch>=2.9
+torchaudio>=2.9
+qwen-tts==0.1.1
+
+# Tokenizer
+transformers>=4.57
+
+# API server
+fastapi>=0.115
+uvicorn>=0.34
+
+# Model download (also used by client.py and benchmark)
+huggingface_hub[hf_xet]
+requests>=2.32
+
+# breeze-tts-mlx (install from source)
+# git clone https://github.com/rishikksh20/breeze-tts-mlx.git
+# pip install -e breeze-tts-mlx/

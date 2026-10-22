@@ -48,8 +48,45 @@ def nvidia(query: str) -> list[str]:
         return []
 
 
+def apple_silicon_info() -> dict | None:
+    """Detect Apple Silicon chip, memory, and GPU cores.  Returns None on non-Mac."""
+    if platform.system() != "Darwin" or platform.machine() != "arm64":
+        return None
+    info: dict = {"chip": "Apple Silicon"}
+    try:
+        chip = subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"],
+                              capture_output=True, text=True, timeout=5).stdout.strip()
+        if chip:
+            info["chip"] = chip
+    except (OSError, subprocess.SubprocessError):
+        pass
+    try:
+        mem = int(subprocess.run(["sysctl", "-n", "hw.memsize"],
+                                 capture_output=True, text=True, timeout=5).stdout.strip())
+        info["memory_gb"] = mem // (1024 ** 3)
+    except (OSError, subprocess.SubprocessError, ValueError):
+        pass
+    try:
+        sp = subprocess.run(["system_profiler", "SPDisplaysDataType"],
+                            capture_output=True, text=True, timeout=10).stdout
+        for line in sp.splitlines():
+            if "Total Number of Cores" in line:
+                m = re.search(r"(\d+)", line)
+                if m:
+                    info["gpu_cores"] = int(m.group(1))
+                    break
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return info
+
+
 def cpu_name() -> str:
     try:
+        if platform.system() == "Darwin":
+            chip = subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"],
+                                  capture_output=True, text=True, timeout=5).stdout.strip()
+            if chip:
+                return chip
         if platform.system() == "Windows":
             return subprocess.run(["powershell", "-NoProfile", "-Command",
                                    "(Get-CimInstance Win32_Processor | Select-Object -First 1).Name"],
@@ -142,14 +179,26 @@ def main() -> None:
 
     health = requests.get(f"{args.url}/health", timeout=10)
     health.raise_for_status()
+    apple = apple_silicon_info()
     gpu = nvidia("name,compute_cap,memory.total,driver_version")
-    system = {
-        "gpu": gpu[0] if gpu else "unknown (nvidia-smi not available here)",
-        "cpu": cpu_name(),
-        "os": os_name(),
-    }
-    config = {k: cfg.get(k) for k in ("COMPOSE_PROFILES", "BREEZE_GGUF_FILE", "BREEZE_ENGINE_ARGS",
-                                      "BREEZE_PYTORCH_ARGS", "CUDA_ARCHS", "BREEZE_CPP_COMMIT")}
+    if apple:
+        system = {
+            "chip": apple.get("chip", "Apple Silicon"),
+            "gpu": f"{apple.get('chip', 'Apple Silicon')} ({apple.get('gpu_cores', '?')} GPU cores)",
+            "memory_gb": apple.get("memory_gb"),
+            "cpu": cpu_name(),
+            "os": os_name(),
+        }
+    else:
+        system = {
+            "gpu": gpu[0] if gpu else "unknown (nvidia-smi not available here)",
+            "cpu": cpu_name(),
+            "os": os_name(),
+        }
+    config_keys = ["COMPOSE_PROFILES", "BREEZE_GGUF_FILE", "BREEZE_ENGINE_ARGS",
+                   "BREEZE_PYTORCH_ARGS", "CUDA_ARCHS", "BREEZE_CPP_COMMIT",
+                   "BREEZE_MLX_REPO", "BREEZE_MLX_MODEL_DIR", "BREEZE_MLX_COMPILE"]
+    config = {k: cfg.get(k) for k in config_keys if cfg.get(k)}
     vram_idle = max((int(x) for x in nvidia("memory.used")), default=None)
 
     sampler = VramSampler()
@@ -167,15 +216,20 @@ def main() -> None:
         warm_runs.append(result)
     sampler.stop.set()
 
+    memory_info = {"vram_mb": {"idle": vram_idle, "peak": sampler.peak or None}}
+    if apple:
+        memory_info["unified_memory_gb"] = apple.get("memory_gb")
+
     results = {
         "date": dt.datetime.now().isoformat(timespec="seconds"),
         "label": args.label, "notes": args.notes, "url": args.url, "system": system, "config": config,
-        "vram_mb": {"idle": vram_idle, "peak": sampler.peak or None},
+        **memory_info,
         "short_line": short, "words_50": long, "warm": warm_runs,
     }
-    gpu_name = re.sub(r"[^A-Za-z0-9]+", "-", system["gpu"].split(",")[0]).strip("-").lower()
-    out = envfile.REPO / "benchmarks" / "results" / (
-        f"{dt.date.today()}_{gpu_name}_{config['COMPOSE_PROFILES'] or 'unknown'}.json")
+    gpu_slug = system.get("chip", system["gpu"].split(",")[0]) if apple else system["gpu"].split(",")[0]
+    gpu_name = re.sub(r"[^A-Za-z0-9]+", "-", gpu_slug).strip("-").lower()
+    runtime = config.get("COMPOSE_PROFILES") or "unknown"
+    out = envfile.REPO / "benchmarks" / "results" / f"{dt.date.today()}_{gpu_name}_{runtime}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(results, indent=2) + "\n", encoding="utf-8")
 
@@ -190,7 +244,10 @@ def main() -> None:
         print("|---|---|---|---|---|")
         for w in warm_runs:
             print(f"| | {w['id_ms']} | {w['wait_first_audio_s']} | {w['min_margin_s']:+} | {w['stalled']} |")
-    print(f"\nGPU memory (whole card): idle {vram_idle} MB, peak {sampler.peak} MB")
+    if apple:
+        print(f"\nApple Silicon: {system.get('chip', 'unknown')}, {apple.get('memory_gb', '?')} GB unified memory")
+    else:
+        print(f"\nGPU memory (whole card): idle {vram_idle} MB, peak {sampler.peak} MB")
 
 
 if __name__ == "__main__":

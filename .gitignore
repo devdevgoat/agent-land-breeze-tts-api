@@ -5,7 +5,17 @@ responses/
 *.log
 *.pcm
 *.tmp
+*.wav
+.venv/
 __pycache__/
+.build/
+.swiftpm/
+/breeze
+/breeze-macos-arm64.tar.gz
+/breeze-macos-arm64.tar.gz.sha256
+logs/
+breeze-tts-mlx/
+nimbalyst-local/
 # Voice clips are personal data (and often someone else's voice): keep them out of git.
 voices/*
 !voices/README.md
